@@ -9,63 +9,246 @@ metadata:
 spec:
   owner: pdd-team
   type: service
+
   parameters:
-    title: General info
-    description: At this step enter all basic information about your new component. Here you will define how it will be shown on catalog. [Learn more about catalog](https://dev.gb.tech/docs/default/component/plataforma-de-desenvolvimento/backstage/catalog/) or send your doubts on [#talk-to-pdd](https://grupoboticario-corp.slack.com/archives/C036F236PD3)
-    required:
-      - githubUser
-      - domain
-      - system
-      - team
-      - component
-      - componentDescription
-    properties:
-      githubUser:
-        title: Github User
-        description: This user will be used as committer for the first commit on Github repository.
-        type: object
-        ui:field: GBTechGetGithubUserInfo
-      domain:
-        title: Domain / Value Stream
-        description: This field defines which cloud structure your product will be deployed. It will impact at costs and permissions. Please chose it carefully! A wrong choice here will demand a migration between AWS Accounts.
-        type: string
-        ui:autofocus: true
-        ui:field: GbEntityPicker
-        ui:options:
-          allowedKinds:
-            - Domain
-          defaultKind: Domain
-          filters:
-            metadata:
-              gbtech-multiaccount: true
-          allowNewValue: false
-      system:
-        title: System, Project or Product
-        description: This field defines the component group, usually used to define which components or repositories belongs to a specific product. This way every team can understand that your product is a sum of many repositories. If youth product is not present at this list, please create one through 'System, Product or Project' template before continue.
-        type: string
-        ui:field: GbEntityPicker
-        ui:options:
-          allowedKinds:
-            - System
-          defaultKind: System
-          allowNewValue: false
-      team:
-        title: Github Team
-        type: string
-        description: Select the team that will be responsible for this repository. It will have maintainer access and will approve PRs and will set as a CODEOWNER.
-        ui:field: GbEntityPicker
-        ui:options:
-          allowedKinds:
-            - Group
-          defaultKind: Group
-          allowNewValue: false
-      component:
-        title: Component Name
-        type: string
-        pattern: '^[a-z0-9-]{4,}$'
-        description: >
-          The component name. Pattern: ^[a-z0-9-]{4,}$
-      componentDescription:
-        title: Component Description
-        type: string
-        description: Describe in few words your new component
+    - title: General info
+      description: At this step enter all basic information about your new component. Here you will define how it will be shown on catalog. [Learn more about catalog](https://dev.gb.tech/docs/default/component/plataforma-de-desenvolvimento/backstage/catalog/) or send your doubts on [#talk-to-pdd](https://grupoboticario-corp.slack.com/archives/C036F236PD3)
+      required:
+        - githubUser
+        - domain
+        - system
+        - team
+        - component
+        - componentDescription
+      properties:
+        githubUser:
+          title: Github User
+          description: This user will be used as committer for the first commit on Github repository.
+          type: object
+          ui:field: GBTechGetGithubUserInfo
+        domain:
+          title: Domain / Value Stream
+          description: This field defines which cloud structure your product will be deployed. It will impact at costs and permissions. Please chose it carefully! A wrong choice here will demand a migration between AWS Accounts.
+          type: string
+          ui:autofocus: true
+          ui:field: GbEntityPicker
+          ui:options:
+            allowedKinds:
+              - Domain
+            defaultKind: Domain
+            filters:
+              metadata:
+                gbtech-multiaccount: true
+            allowNewValue: false
+        system:
+          title: System, Project or Product
+          description: This field defines the component group, usually used to define which components or repositories belongs to a specific product. This way every team can understand that your product is a sum of many repositories. If youth product is not present at this list, please create one through 'System, Product or Project' template before continue.
+          type: string
+          ui:field: GbEntityPicker
+          ui:options:
+            allowedKinds:
+              - System
+            defaultKind: System
+            allowNewValue: false
+        team:
+          title: Github Team
+          type: string
+          description: Select the team that will be responsible for this repository. It will have maintainer access and will approve PRs and will set as a CODEOWNER.
+          ui:field: GbEntityPicker
+          ui:options:
+            allowedKinds:
+              - Group
+            defaultKind: Group
+            allowNewValue: false
+        component:
+          title: Component Name
+          type: string
+          pattern: '^[a-z0-9-]{4,}$'
+          description: >
+            The component name. Pattern: ^[a-z0-9-]{4,}$
+        componentDescription:
+          title: Component Description
+          type: string
+          description: Describe in few words your new component
+
+  steps:
+    - id: sonar
+      name: Initialize Sonar
+      action: gb-tech:sonar-init
+      input:
+        component: ${{ parameters.component }}
+        domain: ${{ parameters.domain }}
+        system: ${{ parameters.system }}
+        team: ${{ parameters.team }}
+
+    - id: vars
+      name: Load Domain Vars
+      action: gb-tech:get-vars
+      input:
+        parameters: ${{parameters}}
+        domain: ${{ parameters.domain }}
+        system: ${{ parameters.system }}
+        component: ${{ parameters.component }}
+        sonarProjectId: ${{ steps.sonar.output.projectId }}
+        team: ${{ parameters.team }}
+        additionalParameters:
+          lifecycle: "experimental"
+          hasArgocd: true
+          argocdAppSelector: ${{parameters.component}}
+          hasNewRelic: true
+          newRelicEntityName: ${{parameters.component}}
+          appPort: 3000
+          configs:
+            - name: "NEW_RELIC_CONFIG_FILE"
+              value: "./newrelic.ini"
+            - name: "PYTHONPATH"
+              value: "."
+            - name: "PYTHONUNBUFFERED"
+              value: "1"
+            - name: "PYTHONDONTWRITEBYTECODE"
+              value: "1"
+            - name: "POETRY_VIRTUALENVS_CREATE"
+              value: "false"
+            - name: "LOG_LEVEL_ENABLED"
+              value: "ERROR"
+            - name: "DOCKER_CMD"
+              value: "newrelic-admin run-program gunicorn {{ case 'snakeCase' parameters.component}}.asgi -b 0.0.0.0:3000 -k uvicorn.workers.UvicornWorker"
+
+    - id: github-app-token
+      name: Get Github App Tokens
+      action: gb-tech:get-github-app-token
+      input:
+        accountLogin: ${{steps.vars.output.github.orgName}}
+
+    - id: scafflater-init
+      name: Init code template
+      action: gb-tech:scafflater-init
+      input:
+        repo: "https://github.com/${{steps.vars.output.github.orgName}}/pdd-template-hexagonal-python"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-init-github
+      name: Configuring Github
+      action: gb-tech:scafflater-init
+      input:
+        repo: "https://github.com/${{steps.vars.output.github.orgName}}/pdd-template-github"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-init-backstage
+      name: Init Backstage Configuration
+      action: gb-tech:scafflater-init
+      input:
+        repo: "https://github.com/${{steps.vars.output.github.orgName}}/pdd-template-backstage"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-catalog-info
+      name: Generate "catalog-info.yaml"
+      action: gb-tech:scafflater-add-partial
+      input:
+        templateName: "pdd-template-backstage"
+        partial: "catalog:configure"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-k8s-deploy
+      name: Configuring K8s deploy
+      action: gb-tech:scafflater-add-partial
+      input:
+        templateName: "pdd-template-backstage"
+        partial: "k8s:app-deploy"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-init-infra
+      name: Init Infra
+      action: gb-tech:scafflater-init
+      input:
+        repo: "https://github.com/${{steps.vars.output.github.orgName}}/pdd-template-crossplane-aws"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-infra-secrets
+      name: Add secret manager
+      action: gb-tech:scafflater-add-partial
+      input:
+        templateName: "pdd-template-crossplane-aws"
+        partial: "secrets"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-infra-app-role
+      name: Add app role
+      action: gb-tech:scafflater-add-partial
+      input:
+        templateName: "pdd-template-crossplane-aws"
+        partial: "app-role"
+        parameters: ${{steps.vars.output.parameters}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: scafflater-infra
+      name: Configuring requested cloud services
+      action: gb-tech:infra-scafflater
+      input:
+        repo: "https://github.com/${{steps.vars.output.github.orgName}}/pdd-template-crossplane-aws"
+        parameters: ${{steps.vars.output.parameters}}
+        services: ${{parameters.services}}
+        config:
+          githubUsername: "x-access-token"
+          githubPassword: ${{ steps['github-app-token'].output.accessToken }}
+          annotate: false
+
+    - id: create-repo
+      name: Create repo
+      action: gb-tech:initialize-repo
+      input:
+        owner: ${{steps.vars.output.github.orgName}}
+        repo: ${{steps.vars.output.github.repoName}}
+        description: ${{parameters.componentDescription}}
+        type: "app-backend"
+        template: "${{steps.vars.output.github.orgName}}/pdd-template-hexagonal-python"
+        domain: ${{parameters.domain}}
+        team: ${{parameters.team}}
+        committerEmail: ${{parameters.githubUser.email}}
+        committerName: ${{parameters.githubUser.displayName}}
+
+    - id: register
+      name: Register New System
+      action: catalog:register
+      input:
+        repoContentsUrl: "${{steps.vars.output.github.repoUrl}}/blob/main"
+        catalogInfoPath: "/catalog-info.yaml"
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.vars.output.github.repoUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
