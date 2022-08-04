@@ -1,0 +1,72 @@
+# @scf-option  {"ignore": "true"}
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: template-hexagonal-python
+  title: Hexagonal Python
+  description: Create a new Python app, using Hexagonal Architecture
+  tags: ["python", "backend", "hexagonal"]
+spec:
+  owner: pdd-team
+  type: service
+
+paramters:
+  title: General info
+  description: At this step enter all basic information about your new component. Here you will define how it will be shown on catalog. [Learn more about catalog](https://dev.gb.tech/docs/default/component/plataforma-de-desenvolvimento/backstage/catalog/) or send your doubts on [#talk-to-pdd](https://grupoboticario-corp.slack.com/archives/C036F236PD3)
+  required:
+    - githubUser
+    - domain
+    - system
+    - team
+    - component
+    - componentDescription
+  properties:
+    githubUser:
+      title: Github User
+      description: This user will be used as committer for the first commit on Github repository.
+      type: object
+      ui:field: GBTechGetGithubUserInfo
+    domain:
+      title: Domain / Value Stream
+      description: This field defines which cloud structure your product will be deployed. It will impact at costs and permissions. Please chose it carefully! A wrong choice here will demand a migration between AWS Accounts.
+      type: string
+      ui:autofocus: true
+      ui:field: GbEntityPicker
+      ui:options:
+        allowedKinds:
+          - Domain
+        defaultKind: Domain
+        filters:
+          metadata:
+            gbtech-multiaccount: true
+        allowNewValue: false
+    system:
+      title: System, Project or Product
+      description: This field defines the component group, usually used to define which components or repositories belongs to a specific product. This way every team can understand that your product is a sum of many repositories. If youth product is not present at this list, please create one through 'System, Product or Project' template before continue.
+      type: string
+      ui:field: GbEntityPicker
+      ui:options:
+        allowedKinds:
+          - System
+        defaultKind: System
+        allowNewValue: false
+    team:
+      title: Github Team
+      type: string
+      description: Select the team that will be responsible for this repository. It will have maintainer access and will approve PRs and will set as a CODEOWNER.
+      ui:field: GbEntityPicker
+      ui:options:
+        allowedKinds:
+          - Group
+        defaultKind: Group
+        allowNewValue: false
+    component:
+      title: Component Name
+      type: string
+      pattern: '^[a-z0-9-]{4,}$'
+      description: >
+        The component name. Pattern: ^[a-z0-9-]{4,}$
+    componentDescription:
+      title: Component Description
+      type: string
+      description: Describe in few words your new component
